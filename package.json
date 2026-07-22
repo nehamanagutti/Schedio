@@ -1,0 +1,14 @@
+{
+  "name": "schedio",
+  "version": "1.0.0",
+  "description": "Faculty Timetable Scheduler - Full Stack",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start": "node scripts/dev.js",
+    "build": "cd frontend && npm run build",
+    "android:sync": "cd frontend && npm run build && npx cap sync android",
+    "android:apk": "cd frontend\\android && gradlew.bat assembleDebug"
+  }
+}

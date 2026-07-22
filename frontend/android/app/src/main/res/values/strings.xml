@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Schedio</string>
+    <string name="title_activity_main">Schedio</string>
+    <string name="package_name">com.schedio.app</string>
+    <string name="custom_url_scheme">com.schedio.app</string>
+</resources>

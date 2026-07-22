@@ -1,0 +1,9 @@
+{
+  "appId": "com.schedio.app",
+  "appName": "Schedio",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

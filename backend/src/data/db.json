@@ -1,0 +1,21 @@
+{
+  "users": [],
+  "classes": [],
+  "posts": [],
+  "coverRequests": [],
+  "messages": [],
+  "pendingRegistrations": [
+    {
+      "email": "sushantkhemalapure@gmail.com",
+      "name": "sushant",
+      "phone": "9916484463",
+      "password": "$2a$10$e6uBonho5f5uHt0YUqYPausZO.gzqxYHy9olW5PZaQ5U30TEnmCs6",
+      "department": "AI",
+      "title": "prof",
+      "otp": "972503",
+      "otpExpiresAt": 1784731762097,
+      "attempts": 0,
+      "createdAt": 1784731162097
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+// src/utils/api.js
+// In local dev, '/api' is proxied to localhost:4000 by vite.config.js.
+// In production (Vercel), there is no backend at '/api' unless you set
+// VITE_API_URL to your deployed backend's URL, e.g.:
+//   VITE_API_URL=https://schedio-backend.onrender.com/api
+const configuredApiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+const isNativeApp = Boolean(window.Capacitor);
+
+// `10.0.2.2` is Android Emulator's alias for the development computer. A
+// physical phone must use VITE_API_URL (a deployed HTTPS API or the computer's
+// LAN IP), because it cannot reach that emulator-only address.
+const BASE = configuredApiUrl || (isNativeApp ? 'http://10.0.2.2:4000/api' : '/api');
+
+function getToken() {
+  return localStorage.getItem('schedio_token');
+}
+
+async function request(method, path, body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+  } catch {
+    const nativeHint = isNativeApp && !configuredApiUrl
+      ? ' This Android build is using the emulator-only default. Set VITE_API_URL to your deployed HTTPS API (recommended) or your computer\'s LAN address, then rebuild the app.'
+      : '';
+    throw new Error(`Unable to reach the API at ${BASE}.${nativeHint}`);
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    // Response was not JSON; almost always means the API URL is wrong
+    // (e.g. hitting a 404 HTML page because the backend isn't deployed/reachable).
+    throw new Error(
+      `Could not reach the API at ${BASE}${path} (status ${res.status}). ` +
+      `Check that the backend is deployed and VITE_API_URL is set correctly.`
+    );
+  }
+  if (!res.ok) {
+    const err = new Error(data.error || 'Request failed');
+    Object.assign(err, data); // e.g. { unverified: true, email } from /login
+    throw err;
+  }
+  return data;
+}
+
+export const api = {
+  // Auth
+  register: (body) => request('POST', '/auth/register', body),
+  verifyOtp: (body) => request('POST', '/auth/verify-otp', body),
+  resendOtp: (body) => request('POST', '/auth/resend-otp', body),
+  login: (body) => request('POST', '/auth/login', body),
+  me: () => request('GET', '/auth/me'),
+  updateProfile: (body) => request('PATCH', '/auth/profile', body),
+
+  // Users
+  getUsers: () => request('GET', '/users'),
+  heartbeat: () => request('PATCH', '/users/heartbeat'),
+
+  // Classes
+  getMyClasses: () => request('GET', '/classes'),
+  getUserClasses: (userId) => request('GET', `/classes/user/${userId}`),
+  createClass: (body) => request('POST', '/classes', body),
+  updateClass: (id, body) => request('PATCH', `/classes/${id}`, body),
+  deleteClass: (id) => request('DELETE', `/classes/${id}`),
+
+  // Posts
+  getPosts: () => request('GET', '/posts'),
+  createPost: (body) => request('POST', '/posts', body),
+  deletePost: (id) => request('DELETE', `/posts/${id}`),
+
+  // Cover
+  getCoverRequests: () => request('GET', '/cover'),
+  createCoverRequest: (body) => request('POST', '/cover', body),
+  respondToCover: (id, status) => request('PATCH', `/cover/${id}`, { status }),
+
+  // Messages
+  getMessages: (userId) => request('GET', `/messages/${userId}`),
+  sendMessage: (toUserId, content) => request('POST', '/messages', { toUserId, content }),
+  getUnreadCount: () => request('GET', '/messages/unread/count')
+};
