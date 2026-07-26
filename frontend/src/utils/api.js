@@ -1,15 +1,11 @@
 // src/utils/api.js
-// In local dev, '/api' is proxied to localhost:4000 by vite.config.js.
-// In production (Vercel), there is no backend at '/api' unless you set
-// VITE_API_URL to your deployed backend's URL, e.g.:
-//   VITE_API_URL=https://schedio-backend.onrender.com/api
-const configuredApiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
-const isNativeApp = Boolean(window.Capacitor);
-
-// `10.0.2.2` is Android Emulator's alias for the development computer. A
-// physical phone must use VITE_API_URL (a deployed HTTPS API or the computer's
-// LAN IP), because it cannot reach that emulator-only address.
-const BASE = configuredApiUrl || (isNativeApp ? 'http://10.0.2.2:4000/api' : '/api');
+// In browser development, '/api' is proxied to localhost:4000 by
+// vite.config.js. Deployed and Capacitor builds must provide the public API
+// URL at build time, for example:
+//   VITE_API_URL=https://schedio-api.example.com/api
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
+const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.());
+const BASE = configuredApiUrl || '/api';
 
 function getToken() {
   return localStorage.getItem('schedio_token');
@@ -28,8 +24,8 @@ async function request(method, path, body = null) {
     });
   } catch {
     const nativeHint = isNativeApp && !configuredApiUrl
-      ? ' This Android build is using the emulator-only default. Set VITE_API_URL to your deployed HTTPS API (recommended) or your computer\'s LAN address, then rebuild the app.'
-      : '';
+      ? ' This mobile build has no VITE_API_URL configured. Set it to the public HTTPS API URL (including /api), then rebuild and sync the app.'
+      : ' Check your network connection and confirm that VITE_API_URL points to a reachable API.';
     throw new Error(`Unable to reach the API at ${BASE}.${nativeHint}`);
   }
 

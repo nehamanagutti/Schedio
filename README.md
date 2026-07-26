@@ -176,12 +176,28 @@ code, and the account is created only after that code is confirmed. Copy
 send real emails. Without those values, the backend prints a development code
 to its terminal instead.
 
-### Android API configuration
+### Phone and Android API configuration
 
-`10.0.2.2` only works from the Android Emulator. For a physical phone, create
-`frontend/.env.production` from `frontend/.env.example`, set `VITE_API_URL` to
-your deployed **HTTPS** backend URL, then rebuild and sync Android:
+The app never embeds a local network address. Browser development uses `/api`,
+which Vite proxies to the local backend. A physical phone or Capacitor build
+must be compiled with a publicly reachable **HTTPS** backend URL.
+
+Create `frontend/.env.production` from `frontend/.env.example` and set the
+full API base URL, including `/api`:
+
+```env
+VITE_API_URL=https://your-api.example.com/api
+```
+
+Then rebuild and sync Android:
 
 ```bash
 npm run android:sync
 ```
+
+Ensure the deployed backend has `FRONTEND_URLS` configured for your browser
+deployment. Capacitor Android requests originate from `http://localhost`, which
+is allowed by default. Do not use a private LAN IP for a distributable mobile
+build. For phone browser testing during development, run `npm run dev` in
+`frontend`, open the Vite URL shown for your LAN from the phone, and the Vite
+`/api` proxy will forward requests to the local backend.
