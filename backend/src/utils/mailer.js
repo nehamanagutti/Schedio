@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const net = require('net');
 
 class EmailDeliveryError extends Error {
   constructor(message, cause) {
@@ -70,6 +71,50 @@ function smtpErrorDetails(error) {
     response: error?.response,
     stack: error?.stack,
   };
+}
+
+function testTcpPort(host, port, timeoutMs = 10_000) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish({ port, reachable: true }));
+    socket.once('timeout', () => finish({ port, reachable: false, timeout: true }));
+    socket.once('error', (error) => finish({
+      port,
+      reachable: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        errno: error.errno,
+        address: error.address,
+      }
+    }));
+  });
+}
+
+async function diagnoseBrevoTcpConnectivity() {
+  const host = 'smtp-relay.brevo.com';
+  console.log(`[email-diagnostic] Testing raw TCP connectivity to ${host}:587 and ${host}:465`);
+
+  const results = await Promise.all([testTcpPort(host, 587), testTcpPort(host, 465)]);
+  for (const result of results) {
+    if (result.reachable) {
+      console.log(`[email-diagnostic] ${host}:${result.port} is reachable`);
+    } else if (result.timeout) {
+      console.error(`[email-diagnostic] ${host}:${result.port} timed out`);
+    } else {
+      console.error(`[email-diagnostic] ${host}:${result.port} is unreachable`, result.error);
+    }
+  }
 }
 
 async function verifyEmailTransport() {
@@ -157,4 +202,4 @@ async function sendOtpEmail(toEmail, name, code, requestId = 'unknown') {
   }
 }
 
-module.exports = { EmailDeliveryError, emailConfigured, sendOtpEmail, transporter, verifyEmailTransport };
+module.exports = { EmailDeliveryError, diagnoseBrevoTcpConnectivity, emailConfigured, sendOtpEmail, transporter, verifyEmailTransport };

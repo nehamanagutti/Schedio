@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const { verifyEmailTransport } = require('./utils/mailer');
+const { diagnoseBrevoTcpConnectivity, verifyEmailTransport } = require('./utils/mailer');
 
 const authRoutes = require('./routes/auth');
 const classRoutes = require('./routes/classes');
@@ -82,5 +82,6 @@ app.listen(PORT, () => {
   console.log(`   Health: http://localhost:${PORT}/api/health\n`);
   // Run asynchronously so a temporary email-provider problem never prevents
   // the API health check from starting. The result is clearly logged instead.
+  void diagnoseBrevoTcpConnectivity();
   void verifyEmailTransport();
 });
