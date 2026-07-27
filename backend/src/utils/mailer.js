@@ -8,40 +8,32 @@ class EmailDeliveryError extends Error {
   }
 }
 
-const brevoUser = () => process.env.BREVO_SMTP_USER;
-const brevoKey = () => process.env.BREVO_SMTP_KEY;
-const fromAddress = () => process.env.EMAIL_FROM || brevoUser();
-
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
   secure: false,
   auth: {
-    user: brevoUser(),
-    pass: brevoKey()
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
-  tls: { minVersion: 'TLSv1.2', servername: 'smtp-relay.brevo.com' },
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 20_000
 });
 
 function emailConfigured() {
-  return Boolean(brevoUser() && brevoKey() && fromAddress());
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
 async function verifyEmailTransport() {
   if (!emailConfigured()) {
-    console.error('[email] Brevo SMTP is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_KEY.');
+    console.error('[email] Brevo SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS.');
     return false;
   }
 
   try {
     await transporter.verify();
-    console.log('[email] Brevo SMTP transport verified.');
+    console.log('Brevo SMTP connected successfully');
     return true;
   } catch (error) {
-    console.error(`[email] Brevo SMTP transport verification failed: ${error.message}`);
+    console.error(error);
     return false;
   }
 }
@@ -70,7 +62,7 @@ async function sendOtpEmail(toEmail, name, code) {
 
   try {
     await transporter.sendMail({
-      from: `"Schedio" <${fromAddress()}>`,
+      from: `"Schedio" <${process.env.SMTP_USER}>`,
       to: toEmail,
       subject: 'Your Schedio verification code',
       html: emailHtml(name, code)
