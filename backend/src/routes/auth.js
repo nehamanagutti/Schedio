@@ -155,8 +155,14 @@ router.post('/resend-otp', async (req, res) => {
       ...(!emailConfigured() ? { devOtp: pending.otp } : {})
     });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[auth/resend-otp]', e);
+    if (e instanceof EmailDeliveryError) {
+      return res.status(503).json({
+        error: e.message,
+        code: 'EMAIL_DELIVERY_UNAVAILABLE'
+      });
+    }
+    res.status(500).json({ error: 'Unable to resend the verification code. Please try again.' });
   }
 });
 

@@ -8,59 +8,40 @@ class EmailDeliveryError extends Error {
   }
 }
 
-const provider = () => (process.env.EMAIL_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : 'smtp')).trim().toLowerCase();
-const smtpUser = () => process.env.SMTP_USER || process.env.GMAIL_USER;
-const smtpPassword = () => process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD;
-const smtpHost = () => process.env.SMTP_HOST || 'smtp.gmail.com';
-const smtpPort = () => Number(process.env.SMTP_PORT || 587);
-const fromAddress = () => process.env.EMAIL_FROM || smtpUser();
+const brevoUser = () => process.env.BREVO_SMTP_USER;
+const brevoKey = () => process.env.BREVO_SMTP_KEY;
+const fromAddress = () => process.env.EMAIL_FROM || brevoUser();
 
-// SMTP remains available for local development and non-Render deployments.
-// Explicit timeouts prevent a blocked outbound SMTP connection from hanging an
-// HTTP request indefinitely.
 const transporter = nodemailer.createTransport({
-  host: smtpHost(),
-  port: smtpPort(),
-  secure: process.env.SMTP_SECURE === 'true' || smtpPort() === 465,
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
   auth: {
-    user: smtpUser(),
-    pass: smtpPassword()
+    user: brevoUser(),
+    pass: brevoKey()
   },
-  tls: { minVersion: 'TLSv1.2', servername: smtpHost() },
+  tls: { minVersion: 'TLSv1.2', servername: 'smtp-relay.brevo.com' },
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
   socketTimeout: 20_000
 });
 
 function emailConfigured() {
-  if (provider() === 'resend') {
-    return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
-  }
-  return Boolean(smtpUser() && smtpPassword() && fromAddress());
+  return Boolean(brevoUser() && brevoKey() && fromAddress());
 }
 
 async function verifyEmailTransport() {
   if (!emailConfigured()) {
-    console.error(`[email] ${provider()} is not configured. OTP email delivery is unavailable.`);
+    console.error('[email] Brevo SMTP is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_KEY.');
     return false;
   }
 
   try {
-    if (provider() === 'resend') {
-      const response = await fetch('https://api.resend.com/domains', {
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-        signal: AbortSignal.timeout(10_000)
-      });
-      if (!response.ok) throw new Error(`Resend verification returned HTTP ${response.status}`);
-    } else if (provider() === 'smtp') {
-      await transporter.verify();
-    } else {
-      throw new Error(`Unsupported EMAIL_PROVIDER: ${provider()}`);
-    }
-    console.log(`[email] ${provider()} transport verified.`);
+    await transporter.verify();
+    console.log('[email] Brevo SMTP transport verified.');
     return true;
   } catch (error) {
-    console.error(`[email] ${provider()} transport verification failed: ${error.message}`);
+    console.error(`[email] Brevo SMTP transport verification failed: ${error.message}`);
     return false;
   }
 }
@@ -78,48 +59,22 @@ function emailHtml(name, code) {
   `;
 }
 
-async function sendWithResend(toEmail, name, code) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: `Schedio <${fromAddress()}>`,
-      to: [toEmail],
-      subject: 'Your Schedio verification code',
-      html: emailHtml(name, code)
-    }),
-    signal: AbortSignal.timeout(15_000)
-  });
-  if (!response.ok) {
-    throw new Error(`Resend returned HTTP ${response.status}: ${await response.text()}`);
-  }
-}
-
 async function sendOtpEmail(toEmail, name, code) {
   if (!emailConfigured()) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn(`[DEV MODE - no email configured] OTP for ${toEmail}: ${code}`);
+      console.warn(`[DEV MODE - Brevo SMTP not configured] OTP for ${toEmail}: ${code}`);
       return;
     }
-    throw new EmailDeliveryError('Email delivery is not configured.');
+    throw new EmailDeliveryError('Email delivery is not configured. Set the Brevo SMTP credentials and try again.');
   }
 
   try {
-    if (provider() === 'resend') {
-      await sendWithResend(toEmail, name, code);
-    } else if (provider() === 'smtp') {
-      await transporter.sendMail({
-        from: `"Schedio" <${fromAddress()}>`,
-        to: toEmail,
-        subject: 'Your Schedio verification code',
-        html: emailHtml(name, code)
-      });
-    } else {
-      throw new Error(`Unsupported EMAIL_PROVIDER: ${provider()}`);
-    }
+    await transporter.sendMail({
+      from: `"Schedio" <${fromAddress()}>`,
+      to: toEmail,
+      subject: 'Your Schedio verification code',
+      html: emailHtml(name, code)
+    });
   } catch (error) {
     console.error(`[email] Failed to send OTP to ${toEmail}: ${error.message}`);
     throw new EmailDeliveryError('We could not send the verification email. Please try again shortly.', error);
