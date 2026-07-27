@@ -38,13 +38,16 @@ export default function Login() {
     e.preventDefault();
     setError(''); setInfo(''); setLoading(true);
     try {
+      console.info('[register] Create Account clicked', { email: form.email, phone: form.phone });
       const { email, devOtp } = await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, department: form.department, title: form.title });
+      console.info('[register] API accepted registration', { email });
       setPendingEmail(email);
       setMode('otp');
       setInfo(devOtp
         ? `Local dev code for ${email}: ${devOtp}`
         : `We sent a 6-digit code to ${email}. Enter it below to activate your account.`);
     } catch (err) {
+      console.error('[register] registration failed', err);
       setError(err.message);
     } finally { setLoading(false); }
   }

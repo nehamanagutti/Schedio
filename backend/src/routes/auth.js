@@ -20,27 +20,36 @@ function genOtp() {
 // Step 1 of signup: validate + stash the signup as "pending" and email an OTP.
 // No account (and no JWT) is created yet; that only happens after /verify-otp.
 router.post('/register', async (req, res) => {
+  const requestId = req.requestId || 'unknown';
   try {
     const { name, email, phone, password, department, title } = req.body;
+    console.log(`[auth/register:${requestId}] validating incoming registration`, { email, phone });
     if (!name || !email || !phone || !password) {
+      console.warn(`[auth/register:${requestId}] validation failed: missing required fields`);
       return res.status(400).json({ error: 'Name, email, phone, and password are required' });
     }
     if (!EMAIL_RE.test(email)) {
+      console.warn(`[auth/register:${requestId}] validation failed: invalid email`, { email });
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
     if (password.length < 6) {
+      console.warn(`[auth/register:${requestId}] validation failed: password too short`, { email });
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
     const normalizedEmail = email.trim().toLowerCase();
     if (store.findUser(u => u.phone === phone)) {
+      console.warn(`[auth/register:${requestId}] validation failed: phone already registered`, { phone });
       return res.status(409).json({ error: 'Phone number already registered' });
     }
     if (store.findUser(u => u.email === normalizedEmail)) {
+      console.warn(`[auth/register:${requestId}] validation failed: email already registered`, { email: normalizedEmail });
       return res.status(409).json({ error: 'Email already registered' });
     }
+    console.log(`[auth/register:${requestId}] validation passed`, { email: normalizedEmail });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const code = genOtp();
+    console.log(`[auth/register:${requestId}] OTP generated`, { email: normalizedEmail, expiresInMinutes: 10 });
 
     const pendingRegistration = {
       email: normalizedEmail,
@@ -55,10 +64,14 @@ router.post('/register', async (req, res) => {
       createdAt: Date.now()
     };
 
-    await sendOtpEmail(normalizedEmail, name, code);
+    console.log(`[auth/register:${requestId}] requesting SMTP email delivery`, { email: normalizedEmail });
+    await sendOtpEmail(normalizedEmail, name, code, requestId);
+    console.log(`[auth/register:${requestId}] SMTP email delivery completed`, { email: normalizedEmail });
     // Only persist a registration after the code has been accepted for
     // delivery. This avoids leaving an unusable pending account on failures.
     store.addPending(pendingRegistration);
+    console.log(`[auth/register:${requestId}] pending registration saved`, { email: normalizedEmail });
+    console.log(`[auth/register:${requestId}] sending success response`, { email: normalizedEmail });
     res.status(200).json({
       pending: true,
       email: normalizedEmail,
@@ -66,7 +79,7 @@ router.post('/register', async (req, res) => {
       ...(!emailConfigured() ? { devOtp: code } : {})
     });
   } catch (e) {
-    console.error('[auth/register]', e);
+    console.error(`[auth/register:${requestId}] failed`, e);
     if (e instanceof EmailDeliveryError) {
       return res.status(503).json({
         error: e.message,
@@ -137,8 +150,10 @@ router.post('/verify-otp', async (req, res) => {
 
 // POST /api/auth/resend-otp
 router.post('/resend-otp', async (req, res) => {
+  const requestId = req.requestId || 'unknown';
   try {
     const { email } = req.body;
+    console.log(`[auth/resend-otp:${requestId}] validating incoming resend request`, { email });
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const normalizedEmail = email.trim().toLowerCase();
     const pending = store.findPending(p => p.email === normalizedEmail);
@@ -146,16 +161,21 @@ router.post('/resend-otp', async (req, res) => {
       return res.status(400).json({ error: 'No pending registration for this email. Please register again.' });
     }
     pending.otp = genOtp();
+    console.log(`[auth/resend-otp:${requestId}] OTP generated`, { email: normalizedEmail, expiresInMinutes: 10 });
     pending.otpExpiresAt = Date.now() + OTP_TTL_MS;
     pending.attempts = 0;
     store.addPending(pending);
-    await sendOtpEmail(normalizedEmail, pending.name, pending.otp);
+    console.log(`[auth/resend-otp:${requestId}] pending registration saved`, { email: normalizedEmail });
+    console.log(`[auth/resend-otp:${requestId}] requesting SMTP email delivery`, { email: normalizedEmail });
+    await sendOtpEmail(normalizedEmail, pending.name, pending.otp, requestId);
+    console.log(`[auth/resend-otp:${requestId}] SMTP email delivery completed`, { email: normalizedEmail });
+    console.log(`[auth/resend-otp:${requestId}] sending success response`, { email: normalizedEmail });
     res.json({
       message: 'A new code has been sent',
       ...(!emailConfigured() ? { devOtp: pending.otp } : {})
     });
   } catch (e) {
-    console.error('[auth/resend-otp]', e);
+    console.error(`[auth/resend-otp:${requestId}] failed`, e);
     if (e instanceof EmailDeliveryError) {
       return res.status(503).json({
         error: e.message,

@@ -12,22 +12,26 @@ function getToken() {
 }
 
 async function request(method, path, body = null) {
-  const headers = { 'Content-Type': 'application/json' };
+  const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const headers = { 'Content-Type': 'application/json', 'X-Request-ID': requestId };
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   let res;
   try {
+    console.info(`[api:${requestId}] request`, { method, path, base: BASE });
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
       ...(body ? { body: JSON.stringify(body) } : {})
     });
-  } catch {
+  } catch (error) {
+    console.error(`[api:${requestId}] network failure`, error);
     const nativeHint = isNativeApp && !configuredApiUrl
       ? ' This mobile build has no VITE_API_URL configured. Set it to the public HTTPS API URL (including /api), then rebuild and sync the app.'
       : ' Check your network connection and confirm that VITE_API_URL points to a reachable API.';
     throw new Error(`Unable to reach the API at ${BASE}.${nativeHint}`);
   }
+  console.info(`[api:${requestId}] response received`, { status: res.status, ok: res.ok });
 
   let data;
   try {
@@ -41,10 +45,12 @@ async function request(method, path, body = null) {
     );
   }
   if (!res.ok) {
+    console.error(`[api:${requestId}] API error response`, { status: res.status, code: data.code, error: data.error });
     const err = new Error(data.error || 'Request failed');
     Object.assign(err, data); // e.g. { unverified: true, email } from /login
     throw err;
   }
+  console.info(`[api:${requestId}] request completed`);
   return data;
 }
 

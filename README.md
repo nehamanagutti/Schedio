@@ -166,9 +166,11 @@ Create `backend/.env` to override defaults:
 ```env
 PORT=4000
 JWT_SECRET=your_strong_secret_here
-BREVO_SMTP_USER=your-brevo-login-email@example.com
-BREVO_SMTP_KEY=your-brevo-smtp-key
-EMAIL_FROM=no-reply@your-verified-domain.example
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=your-brevo-smtp-username
+SMTP_PASS=your-brevo-smtp-key
+SMTP_FROM=Sushantkhemalapure@gmail.com
 FRONTEND_URLS=https://your-frontend.example
 ```
 
@@ -176,8 +178,8 @@ Email verification is required for new accounts. Registration sends a six-digit
 code, and the account is created only after that code is confirmed. Copy
 `backend/.env.example` to `backend/.env` and configure Brevo SMTP. The backend
 uses Brevo's SMTP relay at `smtp-relay.brevo.com:587`.
-In Brevo, create an SMTP key, use your Brevo login email for `BREVO_SMTP_USER`,
-and verify the sender domain/address used in `EMAIL_FROM`. Set all of the above
+In Brevo, create an SMTP key, use your Brevo SMTP login for `SMTP_USER`, and
+verify the sender domain/address used in `SMTP_FROM`. Set all of the above
 variables in the Render service's Environment page; never commit real
 credentials. The backend verifies the Brevo SMTP transport at startup and logs
 a clear error if it cannot connect.

@@ -14,6 +14,10 @@ const messageRoutes = require('./routes/messages');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+function requestId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // Allow multiple origins: local dev + your deployed frontend(s).
 // Set FRONTEND_URL in your backend host's env vars to your Vercel URL,
 // e.g. https://schedio.vercel.app (no trailing slash).
@@ -38,9 +42,18 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Request logger
-app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.path}`);
+// Request/response trace logger. The client may provide an ID so browser and
+// Render logs can be correlated; otherwise, generate one on the server.
+app.use((req, res, next) => {
+  req.requestId = req.get('X-Request-ID') || requestId();
+  const startedAt = Date.now();
+  console.log(`[request:${req.requestId}] incoming`, { method: req.method, path: req.path });
+  res.on('finish', () => {
+    console.log(`[request:${req.requestId}] response`, {
+      status: res.statusCode,
+      durationMs: Date.now() - startedAt
+    });
+  });
   next();
 });
 
