@@ -9,7 +9,9 @@ const nodemailer = require('nodemailer');
 //        GMAIL_USER = youraddress@gmail.com
 //        GMAIL_APP_PASSWORD = the 16-character app password (no spaces)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD
