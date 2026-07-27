@@ -166,15 +166,38 @@ Create `backend/.env` to override defaults:
 ```env
 PORT=4000
 JWT_SECRET=your_strong_secret_here
-GMAIL_USER=youraddress@gmail.com
-GMAIL_APP_PASSWORD=your_16_character_gmail_app_password
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM=no-reply@your-verified-domain.example
+FRONTEND_URLS=https://your-frontend.example
 ```
 
 Email verification is required for new accounts. Registration sends a six-digit
 code, and the account is created only after that code is confirmed. Copy
-`backend/.env.example` to `backend/.env` and configure a Gmail App Password to
-send real emails. Without those values, the backend prints a development code
-to its terminal instead.
+`backend/.env.example` to `backend/.env` and configure a production mail
+provider. For Render, Resend is recommended because it uses HTTPS rather than
+an outbound SMTP connection. In Resend, create an API key and verify the domain
+in `EMAIL_FROM`. Set all of the above variables in the Render service's
+Environment page; never commit real credentials. The backend verifies email
+delivery configuration at startup and logs a clear provider error if it cannot
+connect.
+
+For SMTP outside Render, use:
+
+```env
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=youraddress@gmail.com
+SMTP_PASSWORD=your_smtp_or_gmail_app_password
+EMAIL_FROM=youraddress@gmail.com
+```
+
+`GMAIL_USER` and `GMAIL_APP_PASSWORD` remain supported as legacy aliases for
+`SMTP_USER` and `SMTP_PASSWORD`; do not set both sets of variables. Gmail SMTP
+can time out from cloud hosts when outbound TCP port 587 is restricted, so it is
+not the production recommendation for Render.
 
 ### Phone and Android API configuration
 

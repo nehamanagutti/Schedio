@@ -5,15 +5,13 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const store = require('../data/store');
 const { auth, JWT_SECRET } = require('../middleware/auth');
-const { sendOtpEmail } = require('../utils/mailer');
+const { EmailDeliveryError, emailConfigured, sendOtpEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const emailConfigured = () => Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
-
 function genOtp() {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
@@ -44,7 +42,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const code = genOtp();
 
-    store.addPending({
+    const pendingRegistration = {
       email: normalizedEmail,
       name,
       phone,
@@ -55,9 +53,12 @@ router.post('/register', async (req, res) => {
       otpExpiresAt: Date.now() + OTP_TTL_MS,
       attempts: 0,
       createdAt: Date.now()
-    });
+    };
 
     await sendOtpEmail(normalizedEmail, name, code);
+    // Only persist a registration after the code has been accepted for
+    // delivery. This avoids leaving an unusable pending account on failures.
+    store.addPending(pendingRegistration);
     res.status(200).json({
       pending: true,
       email: normalizedEmail,
@@ -65,8 +66,14 @@ router.post('/register', async (req, res) => {
       ...(!emailConfigured() ? { devOtp: code } : {})
     });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[auth/register]', e);
+    if (e instanceof EmailDeliveryError) {
+      return res.status(503).json({
+        error: e.message,
+        code: 'EMAIL_DELIVERY_UNAVAILABLE'
+      });
+    }
+    res.status(500).json({ error: 'Unable to start registration. Please try again.' });
   }
 });
 
@@ -117,8 +124,14 @@ router.post('/verify-otp', async (req, res) => {
     const { password: _, ...safeUser } = user;
     res.status(201).json({ token, user: safeUser });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[auth/resend-otp]', e);
+    if (e instanceof EmailDeliveryError) {
+      return res.status(503).json({
+        error: e.message,
+        code: 'EMAIL_DELIVERY_UNAVAILABLE'
+      });
+    }
+    res.status(500).json({ error: 'Unable to resend the verification code. Please try again.' });
   }
 });
 

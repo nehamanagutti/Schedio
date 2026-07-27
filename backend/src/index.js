@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { verifyEmailTransport } = require('./utils/mailer');
 
 const authRoutes = require('./routes/auth');
 const classRoutes = require('./routes/classes');
@@ -66,4 +67,7 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`\nSchedio API running at http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/api/health\n`);
+  // Run asynchronously so a temporary email-provider problem never prevents
+  // the API health check from starting. The result is clearly logged instead.
+  void verifyEmailTransport();
 });
