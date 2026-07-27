@@ -60,6 +60,7 @@ export const api = {
   verifyOtp: (body) => request('POST', '/auth/verify-otp', body),
   resendOtp: (body) => request('POST', '/auth/resend-otp', body),
   login: (body) => request('POST', '/auth/login', body),
+  firebaseLogin: (idToken) => request('POST', '/auth/firebase', { idToken }),
   me: () => request('GET', '/auth/me'),
   updateProfile: (body) => request('PATCH', '/auth/profile', body),
 

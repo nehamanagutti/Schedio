@@ -6,12 +6,21 @@ const { v4: uuidv4 } = require('uuid');
 const store = require('../data/store');
 const { auth, JWT_SECRET } = require('../middleware/auth');
 const { EmailDeliveryError, emailConfigured, sendOtpEmail } = require('../utils/mailer');
+const { verifyFirebaseIdToken } = require('../utils/firebaseAdmin');
+const { connectMongo } = require('../utils/mongo');
+const FirebaseUser = require('../models/FirebaseUser');
 
 const router = express.Router();
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Firebase exposes the provider ID as e.g. `google.com`; the application
+// stores the stable, UI-friendly provider name required by its user record.
+const SOCIAL_PROVIDERS = new Map([
+  ['google.com', 'google'],
+  ['github.com', 'github']
+]);
 function genOtp() {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
@@ -208,6 +217,108 @@ router.post('/login', async (req, res) => {
     res.json({ token, user: safeUser });
   } catch (e) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/firebase
+// Exchange a Firebase-issued ID token for the application's own JWT. The ID
+// token is always verified server-side; never trust profile data from the app.
+router.post('/firebase', async (req, res) => {
+  const requestId = req.requestId || 'unknown';
+  try {
+    const { idToken } = req.body;
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(401).json({ error: 'A valid Firebase ID token is required.' });
+    }
+
+    const decodedToken = await verifyFirebaseIdToken(idToken);
+    const provider = SOCIAL_PROVIDERS.get(decodedToken.firebase?.sign_in_provider);
+    if (!provider) {
+      return res.status(403).json({ error: 'Only Google and GitHub sign-in are supported.' });
+    }
+    if (!decodedToken.email) {
+      return res.status(400).json({ error: 'Your sign-in provider did not share an email address. Please use an account with a verified email.' });
+    }
+
+    const email = decodedToken.email.trim().toLowerCase();
+    const now = Date.now();
+    await connectMongo();
+
+    // Firebase UID is the primary identity. An email match can link an
+    // existing MongoDB record only when Firebase has verified that address.
+    let mongoUser = await FirebaseUser.findOne({ firebaseUid: decodedToken.uid });
+    if (!mongoUser && decodedToken.email_verified) {
+      mongoUser = await FirebaseUser.findOne({ email });
+    }
+
+    let user = store.findUser(u => u.id === mongoUser?.appUserId)
+      || store.findUser(u => u.firebaseUid === decodedToken.uid)
+      || store.findUser(u => u.email === email);
+
+    const profileUpdates = {
+      firebaseUid: decodedToken.uid,
+      authProvider: provider,
+      name: decodedToken.name || user?.name || email.split('@')[0],
+      email,
+      // `avatar` fulfils the public user contract. `avatarUrl` keeps the
+      // legacy field in sync for clients that already consume it.
+      avatar: decodedToken.picture || user?.avatar || user?.avatarUrl || '',
+      avatarUrl: decodedToken.picture || user?.avatarUrl || user?.avatar || '',
+      lastLogin: now,
+      lastActive: now
+    };
+
+    if (!user) {
+      user = store.addUser({
+        id: uuidv4(),
+        ...profileUpdates,
+        phone: '',
+        department: '',
+        title: '',
+        verified: true,
+        avatarColor: '#F59E0B',
+        createdAt: now
+      });
+    } else {
+      user = store.updateUser(user.id, profileUpdates);
+    }
+
+    // MongoDB is the source of truth for Firebase identities. The JSON-store
+    // update above is a compatibility mirror for the app's existing routes.
+    const mongoUpdates = {
+      appUserId: user.id,
+      firebaseUid: decodedToken.uid,
+      name: profileUpdates.name,
+      email,
+      avatar: profileUpdates.avatar,
+      avatarUrl: profileUpdates.avatarUrl,
+      authProvider: provider,
+      lastLogin: new Date(now),
+      lastActive: now
+    };
+    if (mongoUser) {
+      Object.assign(mongoUser, mongoUpdates);
+      await mongoUser.save();
+    } else {
+      await FirebaseUser.create(mongoUpdates);
+    }
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const { password: _, ...safeUser } = user;
+    console.log(`[auth/firebase:${requestId}] signed in`, { userId: user.id, provider });
+    res.json({ success: true, token, user: safeUser });
+  } catch (error) {
+    console.error(`[auth/firebase:${requestId}] failed`, error);
+    if (error.code === 'FIREBASE_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'Social sign-in is not configured yet. Please contact support.' });
+    }
+    if (error.code === 'MONGODB_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'User storage is not configured yet. Please contact support.' });
+    }
+    if (['auth/id-token-expired', 'auth/id-token-revoked', 'auth/argument-error', 'auth/invalid-id-token'].includes(error.code)) {
+      return res.status(401).json({ error: 'Your sign-in session expired. Please try again.' });
+    }
+    res.status(401).json({ error: 'We could not verify your sign-in. Please try again.' });
   }
 });
 

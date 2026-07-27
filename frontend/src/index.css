@@ -85,6 +85,46 @@ body {
 .btn-success { background: rgba(16,185,129,0.15); color: #6EE7B7; border: 1px solid rgba(16,185,129,0.3); }
 .btn-success:hover { background: rgba(16,185,129,0.25); }
 
+/* Social authentication */
+.social-auth { margin-top:1.65rem; }
+.social-auth__separator { display:flex; align-items:center; gap:0.75rem; margin:0 0 1rem; color:rgba(255,255,255,0.6); font-size:0.78rem; letter-spacing:0; }
+.social-auth__separator span { height:1px; flex:1; background:rgba(255,255,255,0.22); }
+.social-auth__separator b { font-weight:500; }
+.social-auth__buttons { display:grid; gap:0.6rem; }
+.social-button {
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:0.75rem;
+  min-height:50px;
+  width:100%;
+  border:1px solid #d0d7de;
+  border-radius:0.55rem;
+  background:#f6f8fa;
+  color:#101114;
+  font:600 0.95rem 'Inter', sans-serif;
+  cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,0.16);
+  transition:transform 0.15s, box-shadow 0.15s, background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.social-button > :not(.social-button__ripple) { position:relative; z-index:1; }
+.social-button i { width:1.15rem; font-size:1.2rem; }
+.social-button:hover { background:#fff; border-color:#8c959f; box-shadow:0 2px 5px rgba(0,0,0,0.18); transform:translateY(-1px); }
+.social-button:focus-visible { outline:3px solid rgba(88,166,255,0.8); outline-offset:3px; }
+.social-button:active { transform:scale(0.98); }
+.social-button__ripple { position:absolute; inset:0; z-index:0; background:radial-gradient(circle, rgba(10,15,30,0.18) 0%, rgba(10,15,30,0) 62%); transform:scale(0); opacity:0; pointer-events:none; }
+.social-button:active .social-button__ripple { animation:socialRipple 0.5s ease-out; }
+@keyframes socialRipple { 0% { transform:scale(0); opacity:0.8; } 100% { transform:scale(2.3); opacity:0; } }
+
+@media (max-width: 420px) {
+  .social-button { min-height:52px; font-size:0.95rem; }
+  .social-auth__buttons { gap:0.75rem; }
+}
+
 input, select, textarea {
   font-family: 'Inter', sans-serif;
   background: rgba(0,0,0,0.4);

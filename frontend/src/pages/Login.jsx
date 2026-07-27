@@ -2,9 +2,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SocialButton } from '../components/SocialButton';
+import { firebaseAuth, githubProvider, googleProvider } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
 
 export default function Login() {
-  const { login, register, verifyOtp, resendOtp } = useAuth();
+  const { login, loginWithFirebase, register, verifyOtp, resendOtp } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'otp'
   const [error, setError] = useState('');
@@ -12,6 +15,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [socialProvider, setSocialProvider] = useState('');
 
   const [form, setForm] = useState({ phone:'', email:'', password:'', name:'', department:'', title:'' });
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -71,6 +75,32 @@ export default function Login() {
     } catch (err) {
       setError(err.message);
     } finally { setLoading(false); }
+  }
+
+  function socialErrorMessage(error, provider) {
+    switch (error?.code) {
+      case 'auth/popup-closed-by-user': return `${provider} sign-in was cancelled.`;
+      case 'auth/popup-blocked': return 'Your browser blocked the sign-in window. Please allow pop-ups and try again.';
+      case 'auth/account-exists-with-different-credential': return 'An account already exists with this email using another sign-in method.';
+      case 'auth/operation-not-allowed': return `${provider} sign-in has not been enabled for this Firebase project yet.`;
+      case 'auth/unauthorized-domain': return 'This domain is not authorized for Firebase sign-in. Please contact support.';
+      default: return error?.message || `Unable to sign in with ${provider}. Please try again.`;
+    }
+  }
+
+  async function handleSocialLogin(providerName, provider) {
+    setError(''); setInfo(''); setSocialProvider(providerName);
+    try {
+      const result = await signInWithPopup(firebaseAuth, provider);
+      const idToken = await result.user.getIdToken();
+      await loginWithFirebase(idToken);
+      navigate('/');
+    } catch (err) {
+      console.error(`[auth/${providerName.toLowerCase()}] sign-in failed`, err);
+      setError(socialErrorMessage(err, providerName));
+    } finally {
+      setSocialProvider('');
+    }
   }
 
   return (
@@ -157,6 +187,20 @@ export default function Login() {
               {loading ? <><i className="fas fa-spinner fa-spin" /> Creating account...</> : 'Create Account ->'}
             </button>
           </form>
+        )}
+
+        {mode !== 'otp' && (
+          <div className="social-auth" aria-label="Social sign-in options">
+            <div className="social-auth__separator" aria-hidden="true">
+              <span />
+              <b>OR</b>
+              <span />
+            </div>
+            <div className="social-auth__buttons">
+              <SocialButton provider="Google" iconClass="fa-brands fa-google" onClick={() => handleSocialLogin('Google', googleProvider)} disabled={loading || Boolean(socialProvider)} loading={socialProvider === 'Google'} />
+              <SocialButton provider="GitHub" iconClass="fa-brands fa-github" onClick={() => handleSocialLogin('GitHub', githubProvider)} disabled={loading || Boolean(socialProvider)} loading={socialProvider === 'GitHub'} />
+            </div>
+          </div>
         )}
       </div>
     </div>

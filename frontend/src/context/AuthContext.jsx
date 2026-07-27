@@ -33,6 +33,12 @@ export function AuthProvider({ children }) {
     setUser(user);
   }
 
+  async function loginWithFirebase(idToken) {
+    const { token, user } = await api.firebaseLogin(idToken);
+    localStorage.setItem('schedio_token', token);
+    setUser(user);
+  }
+
   // Step 1: submit signup details, triggers an OTP email. Does NOT log the
   // user in yet; no account exists until the code is verified.
   async function register(data) {
@@ -63,7 +69,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithFirebase, register, verifyOtp, resendOtp, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
