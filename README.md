@@ -218,6 +218,43 @@ Then rebuild and sync Android:
 npm run android:sync
 ```
 
+### Build an Android APK
+
+Prerequisite: install Android Studio (including its JDK) or JDK 17+, and make
+sure `JAVA_HOME` points to that JDK before running Gradle. On Windows, Android
+Studio's bundled JDK is commonly located at
+`C:\\Program Files\\Android\\Android Studio\\jbr`.
+
+1. Deploy the backend to a public HTTPS URL and configure its
+   `FRONTEND_URLS` value for any browser deployment you use.
+2. Create `frontend/.env.production` (this file is intentionally not
+   committed) with the public API URL:
+
+   ```env
+   VITE_API_URL=https://your-backend-domain.com/api
+   ```
+
+   The URL must include `/api`, use HTTPS, and must not be a LAN/private IP
+   address or `localhost`.
+3. From the project root, build the web assets and copy them into the Android
+   project:
+
+   ```bash
+   npm run android:sync
+   ```
+4. Build the debug APK:
+
+   ```bash
+   npm run android:apk
+   ```
+
+   The APK is written to
+   `frontend/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+`VITE_API_URL` is baked into the web bundle at build time. If the backend URL
+changes, update `frontend/.env.production`, run `npm run android:sync`, and
+build the APK again.
+
 Ensure the deployed backend has `FRONTEND_URLS` configured for your browser
 deployment. Capacitor Android requests originate from `http://localhost`, which
 is allowed by default. Do not use a private LAN IP for a distributable mobile
