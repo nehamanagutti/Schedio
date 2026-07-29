@@ -11,12 +11,15 @@ const firebaseConfig = {
 };
 
 const requiredConfig = ['apiKey', 'authDomain', 'projectId', 'appId'];
-if (requiredConfig.some((key) => !firebaseConfig[key])) {
-  throw new Error('Firebase is not configured. Add the VITE_FIREBASE_* variables to your environment.');
-}
+export const firebaseConfigured = requiredConfig.every((key) => Boolean(firebaseConfig[key]));
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// A missing Firebase configuration must not stop the complete mobile app from
+// rendering. Social buttons stay disabled until a configured production build
+// is made, while password login keeps working normally.
+const app = firebaseConfigured
+  ? (getApps().length ? getApp() : initializeApp(firebaseConfig))
+  : null;
 
-export const firebaseAuth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-export const githubProvider = new GithubAuthProvider();
+export const firebaseAuth = app ? getAuth(app) : null;
+export const googleProvider = app ? new GoogleAuthProvider() : null;
+export const githubProvider = app ? new GithubAuthProvider() : null;

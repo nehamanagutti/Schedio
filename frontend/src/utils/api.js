@@ -57,9 +57,11 @@ async function request(method, path, body = null) {
 export const api = {
   // Auth
   register: (body) => request('POST', '/auth/register', body),
+  registerWithPassword: (body) => request('POST', '/auth/register-password', body),
   verifyOtp: (body) => request('POST', '/auth/verify-otp', body),
   resendOtp: (body) => request('POST', '/auth/resend-otp', body),
   login: (body) => request('POST', '/auth/login', body),
+  loginWithEmail: (body) => request('POST', '/auth/login-email', body),
   firebaseLogin: (idToken) => request('POST', '/auth/firebase', { idToken }),
   me: () => request('GET', '/auth/me'),
   updateProfile: (body) => request('PATCH', '/auth/profile', body),

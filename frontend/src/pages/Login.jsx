@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SocialButton } from '../components/SocialButton';
-import { firebaseAuth, githubProvider, googleProvider } from '../firebase';
+import { firebaseAuth, firebaseConfigured, githubProvider, googleProvider } from '../firebase';
 import { signInWithPopup } from 'firebase/auth';
 
 export default function Login() {
-  const { login, loginWithFirebase, register, verifyOtp, resendOtp } = useAuth();
+  const { login, loginWithEmail, loginWithFirebase, register, registerWithPassword, verifyOtp, resendOtp } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'otp'
   const [error, setError] = useState('');
@@ -16,6 +16,8 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [socialProvider, setSocialProvider] = useState('');
+  const [loginMethod, setLoginMethod] = useState('phone');
+  const [skipOtp, setSkipOtp] = useState(false);
 
   const [form, setForm] = useState({ phone:'', email:'', password:'', name:'', department:'', title:'' });
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -24,7 +26,8 @@ export default function Login() {
     e.preventDefault();
     setError(''); setInfo(''); setLoading(true);
     try {
-      await login(form.phone, form.password);
+      if (loginMethod === 'email') await loginWithEmail(form.email, form.password);
+      else await login(form.phone, form.password);
       navigate('/');
     } catch (err) {
       if (err.unverified) {
@@ -42,6 +45,11 @@ export default function Login() {
     e.preventDefault();
     setError(''); setInfo(''); setLoading(true);
     try {
+      if (skipOtp) {
+        await registerWithPassword({ name: form.name, email: form.email, phone: form.phone, password: form.password, department: form.department, title: form.title });
+        navigate('/');
+        return;
+      }
       console.info('[register] Create Account clicked', { email: form.email, phone: form.phone });
       const { email, devOtp } = await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, department: form.department, title: form.title });
       console.info('[register] API accepted registration', { email });
@@ -89,6 +97,10 @@ export default function Login() {
   }
 
   async function handleSocialLogin(providerName, provider) {
+    if (!firebaseConfigured || !firebaseAuth || !provider) {
+      setError('Social sign-in is not configured in this app build. Please use mobile-number sign-in or contact support.');
+      return;
+    }
     setError(''); setInfo(''); setSocialProvider(providerName);
     try {
       const result = await signInWithPopup(firebaseAuth, provider);
@@ -169,7 +181,12 @@ export default function Login() {
           </form>
         ) : mode === 'login' ? (
           <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
-            <input type="tel" placeholder="Mobile Number" value={form.phone} onChange={set('phone')} required />
+            <div style={{ display:'flex', gap:'0.4rem' }}>
+              {['phone', 'email'].map(method => <button key={method} type="button" onClick={() => setLoginMethod(method)} style={{ flex:1, padding:'0.45rem', borderRadius:'0.5rem', border:'1px solid rgba(255,255,255,0.15)', cursor:'pointer', background: loginMethod === method ? 'rgba(245,158,11,0.18)' : 'transparent', color: loginMethod === method ? '#FBBF24' : 'rgba(255,255,255,0.55)' }}>{method === 'phone' ? 'Mobile number' : 'Email'}</button>)}
+            </div>
+            {loginMethod === 'email'
+              ? <input type="email" placeholder="College Email" value={form.email} onChange={set('email')} required />
+              : <input type="tel" placeholder="Mobile Number" value={form.phone} onChange={set('phone')} required />}
             <input type="password" placeholder="Password" value={form.password} onChange={set('password')} required />
             <button type="submit" className="btn btn-primary" style={{ width:'100%', justifyContent:'center', padding:'0.8rem', fontSize:'1rem', marginTop:'0.25rem' }} disabled={loading}>
               {loading ? <><i className="fas fa-spinner fa-spin" /> Signing in...</> : 'Sign In ->'}
@@ -183,8 +200,12 @@ export default function Login() {
             <input type="password" placeholder="Password (min 6 chars) *" value={form.password} onChange={set('password')} required />
             <input type="text" placeholder="Department (e.g. Computer Science)" value={form.department} onChange={set('department')} />
             <input type="text" placeholder="Title (e.g. Associate Professor)" value={form.title} onChange={set('title')} />
+            <label style={{ display:'flex', alignItems:'center', gap:'0.55rem', color:'rgba(255,255,255,0.7)', fontSize:'0.82rem', cursor:'pointer' }}>
+              <input type="checkbox" checked={skipOtp} onChange={(e) => setSkipOtp(e.target.checked)} />
+              Create account with password only (no email OTP)
+            </label>
             <button type="submit" className="btn btn-primary" style={{ width:'100%', justifyContent:'center', padding:'0.8rem', fontSize:'1rem', marginTop:'0.25rem' }} disabled={loading}>
-              {loading ? <><i className="fas fa-spinner fa-spin" /> Creating account...</> : 'Create Account ->'}
+              {loading ? <><i className="fas fa-spinner fa-spin" /> Creating account...</> : skipOtp ? 'Create Account & Sign In ->' : 'Create Account ->'}
             </button>
           </form>
         )}
@@ -197,8 +218,8 @@ export default function Login() {
               <span />
             </div>
             <div className="social-auth__buttons">
-              <SocialButton provider="Google" iconClass="fa-brands fa-google" onClick={() => handleSocialLogin('Google', googleProvider)} disabled={loading || Boolean(socialProvider)} loading={socialProvider === 'Google'} />
-              <SocialButton provider="GitHub" iconClass="fa-brands fa-github" onClick={() => handleSocialLogin('GitHub', githubProvider)} disabled={loading || Boolean(socialProvider)} loading={socialProvider === 'GitHub'} />
+              <SocialButton provider="Google" iconClass="fa-brands fa-google" onClick={() => handleSocialLogin('Google', googleProvider)} disabled={!firebaseConfigured || loading || Boolean(socialProvider)} loading={socialProvider === 'Google'} />
+              <SocialButton provider="GitHub" iconClass="fa-brands fa-github" onClick={() => handleSocialLogin('GitHub', githubProvider)} disabled={!firebaseConfigured || loading || Boolean(socialProvider)} loading={socialProvider === 'GitHub'} />
             </div>
           </div>
         )}

@@ -33,6 +33,12 @@ export function AuthProvider({ children }) {
     setUser(user);
   }
 
+  async function loginWithEmail(email, password) {
+    const { token, user } = await api.loginWithEmail({ email, password });
+    localStorage.setItem('schedio_token', token);
+    setUser(user);
+  }
+
   async function loginWithFirebase(idToken) {
     const { token, user } = await api.firebaseLogin(idToken);
     localStorage.setItem('schedio_token', token);
@@ -43,6 +49,12 @@ export function AuthProvider({ children }) {
   // user in yet; no account exists until the code is verified.
   async function register(data) {
     return api.register(data); // -> { pending: true, email }
+  }
+
+  async function registerWithPassword(data) {
+    const { token, user } = await api.registerWithPassword(data);
+    localStorage.setItem('schedio_token', token);
+    setUser(user);
   }
 
   // Step 2: confirm the emailed code. This is what actually creates the
@@ -69,7 +81,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginWithFirebase, register, verifyOtp, resendOtp, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithEmail, loginWithFirebase, register, registerWithPassword, verifyOtp, resendOtp, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

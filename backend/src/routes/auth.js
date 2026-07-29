@@ -195,6 +195,46 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
+// POST /api/auth/register-password
+// Direct email/password registration for installations that do not require
+// email OTP verification. The password is still hashed and the normal JWT
+// session is issued, so this is not an anonymous sign-in route.
+router.post('/register-password', async (req, res) => {
+  try {
+    const { name, email, phone, password, department, title } = req.body;
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ error: 'Name, email, phone, and password are required' });
+    }
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (store.findUser(u => u.phone === phone)) return res.status(409).json({ error: 'Phone number already registered' });
+    if (store.findUser(u => u.email === normalizedEmail)) return res.status(409).json({ error: 'Email already registered' });
+
+    const user = store.addUser({
+      id: uuidv4(),
+      name: name.trim(),
+      email: normalizedEmail,
+      phone: phone.trim(),
+      password: await bcrypt.hash(password, 10),
+      department: department?.trim() || '',
+      title: title?.trim() || '',
+      // This route intentionally opts out of OTP verification.
+      verified: true,
+      avatarColor: '#F59E0B',
+      createdAt: Date.now(),
+      lastActive: Date.now()
+    });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const { password: _, ...safeUser } = user;
+    res.status(201).json({ token, user: safeUser });
+  } catch (e) {
+    console.error('[auth/register-password] failed', e);
+    res.status(500).json({ error: 'Unable to create your account. Please try again.' });
+  }
+});
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
@@ -210,6 +250,26 @@ router.post('/login', async (req, res) => {
     // this feature existed have no `verified` field at all; treat those as fine.
     if (user.verified === false) {
       return res.status(403).json({ error: 'Please verify your email before signing in', unverified: true, email: user.email });
+    }
+    store.updateUser(user.id, { lastActive: Date.now() });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const { password: _, ...safeUser } = user;
+    res.json({ token, user: safeUser });
+  } catch (e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/login-email
+// An email/password alternative to mobile-number sign-in. It uses the same
+// password checks and session behavior as the existing login endpoint.
+router.post('/login-email', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+    const user = store.findUser(u => u.email === email.trim().toLowerCase());
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
     store.updateUser(user.id, { lastActive: Date.now() });
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
